@@ -5,32 +5,52 @@ def complete_year(date: str):
     return f'{day}/{month}/20{year}'
 
 def main():
-    trans = pd.read_csv('trades_fii.csv')
-    trans_xp = trans[trans['Ativo'].str.endswith('11')]
-    trans_xp = trans_xp[trans_xp['Corretora'].str.endswith('XP')]
-    trans_xp = trans_xp[trans_xp['Data'] <= '31']
-    trans_xp['Data'] = trans_xp['Data'].transform(complete_year)
-    trans_xp['Data'] = pd.to_datetime(trans_xp['Data'], format='%d/%m/%Y')
-    trans_xp_2023 = trans_xp[(trans_xp['Data'] >= '2022-01-01') & (trans_xp['Data'] <= '2022-12-31')]
-    # print(trans_xp_2023)
+    trans_fii = pd.read_csv('trades_fii.csv')
+    trans_stocks = pd.read_csv('ops_stocks_br.csv')
+    trans = pd.concat([trans_fii, trans_stocks])
+    trans.loc[trans['Corretora'] == 'Rico', 'Corretora'] = 'XP'
+    trans = trans[trans['Data'] <= '31']
+    trans['Data'] = trans['Data'].transform(complete_year)
+    trans['Data'] = pd.to_datetime(trans['Data'], format='%d/%m/%Y')
+    trans_2023 = trans[(trans['Data'] >= '2023-01-01') & (trans['Data'] <= '2023-12-31')]
 
     positions = pd.read_csv('Custodia_2022.csv')
-    print(positions[positions['Corretora'] == 'XP'][['Ativo', 'Qtd']])
-    for _, row in trans_xp_2023.iterrows():
+    positions = positions.drop(columns=['Data', 'Retorno'])
+    # print(positions[positions['Corretora'] == 'XP'][['Ativo', 'Qtd']])
+    for _, row in trans_2023.iterrows():
         asset = row['Ativo']
+        if asset.endswith('12'):
+            continue
+        op_type = row['Op']
         price = row['Preco'] 
         broker = row['Corretora']
-        price = float(price) + 1
-        quantity = row['Quantidade']
-        ref = positions.loc[(positions['Ativo'] == asset) & (positions['Corretora'] == broker)]
+        price = float(price)
+        quantity = int(row['Quantidade'])
+        if op_type == 'Venda':
+            quantity = -quantity
         if not positions[(positions['Ativo'] == asset) & (positions['Corretora'] == broker)].empty:
             # positions['Qtd'] = positions.mask(positions[(positions['Ativo'] == asset) & (positions['Corretora'] == broker)], positions['Qtd'] + quantity)
-                positions.loc[(positions['Ativo'] == asset) & (positions['Corretora']), "Qtd"]  += quantity
-                cond = (positions['Ativo'] == asset) & (positions['Corretora'])
-                current_qtd = positions[cond]['Qtd'].iloc[0]
+                cond = (positions['Ativo'] == asset) & (positions['Corretora'] == 'XP')
+                current_qtd = int(positions[cond]['Qtd'].iloc[0])
                 current_amount = positions[cond]['Total'].iloc[0]
-                positions.loc[(positions['Ativo'] == asset) & (positions['Corretora']), ("Qtd", "Total")] = (current_qtd+quantity, current_amount+quantity*price)
-    print(positions[positions['Corretora'] == 'XP'][['Ativo', 'Qtd', 'Total']])
+                new_amount = current_amount+quantity*price
+                new_qtd = int(current_qtd+quantity)
+                new_pm = new_amount/float(new_qtd)
+                if op_type == 'Venda':
+                    new_pm = positions.loc[cond, 'PM'].iloc[0]
+                positions.loc[cond, ("Qtd", "Total", "PM")] = (new_qtd, new_amount, new_pm)
+        else:
+            print(broker, asset)
+            new_data = {
+                'Corretora' : [broker],
+                'Ativo' : [asset],
+                'Qtd' : [quantity],
+                'PM' : [price],
+                'Total' : [quantity * price]}
+            new_row = pd.DataFrame(new_data)
+            positions = pd.concat([positions, new_row])
+    # print(positions[positions['Corretora'] == 'XP'][['Ativo', 'Qtd', 'Total']])
+    positions = positions.drop(positions[positions['Qtd'] < 1].index)
     positions.to_csv('Processed_2023.csv')
 
     pass

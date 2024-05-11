@@ -1,4 +1,4 @@
-Data,Corretora,Ativo,Operação,Quantidade,Preco,Origem,Situação
+Data,Corretora,Ativo,Op,Quantidade,Preco,Origem,Situação
 27/08/19,Rico,FLMA11,Compra,3,4.04,B3I,Confirmada
 13/09/19,Rico,KNRI11,Compra,1,156.00,B3I,Confirmada
 13/09/19,Rico,ABCP11,Compra,1,93.40,B3I,Confirmada
